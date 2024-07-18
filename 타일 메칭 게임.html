@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>타일 매칭 게임</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: #f0f8ff;
+            text-align: center;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        h1 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        #gameBoard {
+            display: grid;
+            gap: 10px;
+        }
+        .tile {
+            width: 100px;
+            height: 100px;
+            background: #add8e6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            color: white;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: background 0.3s, transform 0.3s;
+        }
+        .tile.matched {
+            background: #98fb98;
+        }
+        .tile:hover {
+            transform: scale(1.05);
+        }
+        button {
+            margin-top: 10px;
+            padding: 10px 20px;
+            background: #4682b4;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #5f9ea0;
+        }
+        #instructionsModal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            display: none;
+            z-index: 10;
+        }
+        #instructionsOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            z-index: 5;
+        }
+        #score {
+            font-size: 24px;
+            margin-top: 10px;
+            color: #333;
+        }
+        #timer {
+            font-size: 24px;
+            margin-top: 10px;
+            color: #333;
+        }
+        #message {
+            font-size: 24px;
+            margin-top: 10px;
+            color: #333;
+        }
+        #homeScreen, #gameScreen {
+            display: none;
+        }
+        #homeScreen.active, #gameScreen.active {
+            display: block;
+        }
+        #shareButtons {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        #shareButtons a {
+            display: inline-block;
+            padding: 10px;
+            background: #4682b4;
+            color: white;
+            border-radius: 5px;
+            text-decoration: none;
+            transition: background 0.3s;
+        }
+        #shareButtons a:hover {
+            background: #5f9ea0;
+        }
+    </style>
+</head>
+<body>
+    <div id="homeScreen" class="active">
+        <h1>타일 매칭 게임</h1>
+        <label for="difficulty">난이도 선택:</label>
+        <select id="difficulty">
+            <option value="easy">쉬움</option>
+            <option value="medium">중간</option>
+            <option value="hard">어려움</option>
+        </select>
+        <button id="startButton">게임 시작</button>
+        <button id="instructionsButton">게임 방법</button>
+    </div>
+    
+    <div id="gameScreen">
+        <h1>타일 매칭 게임</h1>
+        <div id="gameBoard"></div>
+        <button id="restartButton">다시 시작</button>
+        <button id="quitButton">포기하기</button>
+        <div id="score">점수: 0</div>
+        <div id="timer">남은 시간: 1:30</div>
+        <div id="message"></div>
+        <div id="shareButtons" style="display:none;">
+            <a id="shareFacebook" href="#" target="_blank">Facebook 공유</a>
+            <a id="shareTwitter" href="#" target="_blank">Twitter 공유</a>
+            <a id="shareKakao" href="#">KakaoTalk 공유</a>
+        </div>
+    </div>
+
+    <div id="instructionsOverlay"></div>
+    <div id="instructionsModal">
+        <h3>게임 방법</h3>
+        <p>같은 아이콘을 가진 타일 두 개를 맞추는 게임입니다.</p>
+        <p>타일을 클릭하면 아이콘이 나타납니다. 두 개의 타일을 클릭하여 매칭합니다.</p>
+        <p>두 타일이 같으면 매칭됩니다. 그렇지 않으면 다시 숨겨집니다.</p>
+        <button id="closeInstructions">닫기</button>
+    </div>
+
+    <audio id="backgroundMusic" loop>
+        <source src="background-music.mp3" type="audio/mpeg">
+        Your browser does not support the audio element.
+    </audio>
+
+    <script>
+        const homeScreen = document.getElementById('homeScreen');
+        const gameScreen = document.getElementById('gameScreen');
+        const gameBoard = document.getElementById('gameBoard');
+        const startButton = document.getElementById('startButton');
+        const restartButton = document.getElementById('restartButton');
+        const quitButton = document.getElementById('quitButton');
+        const instructionsButton = document.getElementById('instructionsButton');
+        const instructionsModal = document.getElementById('instructionsModal');
+        const instructionsOverlay = document.getElementById('instructionsOverlay');
+        const closeInstructions = document.getElementById('closeInstructions');
+        const backgroundMusic = document.getElementById('backgroundMusic');
+        const scoreDisplay = document.getElementById('score');
+        const timerDisplay = document.getElementById('timer');
+        const messageDisplay = document.getElementById('message');
+        const difficultySelect = document.getElementById('difficulty');
+        const shareButtons = document.getElementById('shareButtons');
+        const shareFacebook = document.getElementById('shareFacebook');
+        const shareTwitter = document.getElementById('shareTwitter');
+        const shareKakao = document.getElementById('shareKakao');
+        let tiles = [];
+        let selectedTiles = [];
+        let matchedTiles = [];
+        let score = 0;
+        let timer;
+        let timeLeft = 90;
+        let difficulty = 'easy';
+
+        function showHomeScreen() {
+            homeScreen.classList.add('active');
+            gameScreen.classList.remove('active');
+            shareButtons.style.display = 'none';
+        }
+
+        function showGameScreen() {
+            homeScreen.classList.remove('active');
+            gameScreen.classList.add('active');
+            shareButtons.style.display = 'none';
+        }
+
+        function initGame() {
+            tiles = [];
+            matchedTiles = [];
+            score = 0;
+            timeLeft = 90;
+            scoreDisplay.textContent = `점수: ${score}`;
+            timerDisplay.textContent = `남은 시간: ${formatTime(timeLeft)}`;
+            messageDisplay.textContent = '';
+            gameBoard.innerHTML = '';
+
+            let colors;
+            switch (difficulty) {
+                case 'easy':
+                    colors = ['🍎', '🍌', '🍇', '🍉'];
+                    gameBoard.style.gridTemplateColumns = 'repeat(4, 100px)';
+                    break;
+                case 'medium':
+                    colors = ['🍎', '🍌', '🍇', '🍉', '🍍', '🍓'];
+                    gameBoard.style.gridTemplateColumns = 'repeat(6, 80px)';
+                    break;
+                case 'hard':
+                    colors = ['🍎', '🍌', '🍇', '🍉', '🍍', '🍓', '🍊', '🍒', '🥝', '🍈'];
+                    gameBoard.style.gridTemplateColumns = 'repeat(8, 60px)';
+                    break;
+            }
+
+            const tileArray = [...colors, ...colors];
+            shuffle(tileArray);
+
+            tileArray.forEach(tile => {
+                const tileDiv = document.createElement('div');
+                tileDiv.classList.add('tile');
+                tileDiv.dataset.value = tile;
+                tileDiv.textContent = '';  // 초기에는 텍스트를 비워둠
+                tileDiv.addEventListener('click', onTileClick);
+                gameBoard.appendChild(tileDiv);
+                tiles.push(tileDiv);
+            });
+
+            startTimer();
+        }
+
+        function startTimer() {
+            clearInterval(timer);
+            timer = setInterval(() => {
+                timeLeft--;
+                timerDisplay.textContent = `남은 시간: ${formatTime(timeLeft)}`;
+                if (timeLeft <= 0) {
+                    clearInterval(timer);
+                    endGame();
+                }
+            }, 1000);
+        }
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainderSeconds = seconds % 60;
+            return `${minutes}:${remainderSeconds < 10 ? '0' : ''}${remainderSeconds}`;
+        }
+
+        function onTileClick(e) {
+            const clickedTile = e.target;
+
+            if (selectedTiles.length < 2 && !clickedTile.classList.contains('matched') && !selectedTiles.includes(clickedTile)) {
+                clickedTile.textContent = clickedTile.dataset.value;
+                selectedTiles.push(clickedTile);
+
+                if (selectedTiles.length === 2) {
+                    checkForMatch();
+                }
+            }
+        }
+
+        function checkForMatch() {
+            const [firstTile, secondTile] = selectedTiles;
+
+            if (firstTile.dataset.value === secondTile.dataset.value) {
+                firstTile.classList.add('matched');
+                secondTile.classList.add('matched');
+                matchedTiles.push(firstTile, secondTile);
+                updateScore(10);
+                displayMessage('매칭 성공!');
+                if (matchedTiles.length === tiles.length) {
+                    endGame();
+                }
+            } else {
+                setTimeout(() => {
+                    firstTile.textContent = '';
+                    secondTile.textContent = '';
+                    updateScore(-1);
+                    displayMessage('매칭 실패!');
+                }, 1000);
+            }
+            selectedTiles = [];
+        }
+
+        function displayMessage(message) {
+            messageDisplay.textContent = message;
+            setTimeout(() => {
+                messageDisplay.textContent = '';
+            }, 2000);
+        }
+
+        function updateScore(points) {
+            score += points;
+            scoreDisplay.textContent = `점수: ${score}`;
+        }
+
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        function quitGame() {
+            clearInterval(timer);
+            alert(`게임을 포기했습니다. 최종 점수: ${score}`);
+            showHomeScreen();
+        }
+
+        function endGame() {
+            clearInterval(timer);
+            alert(`게임이 끝났습니다! 최종 점수: ${score}`);
+            shareButtons.style.display = 'block';
+            shareResults();
+            showHomeScreen();
+        }
+
+        function shareResults() {
+            const url = encodeURIComponent(window.location.href);
+            const text = encodeURIComponent(`저는 타일 매칭 게임에서 ${score}점을 기록했습니다!`);
+            
+            shareFacebook.href = `https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${text}`;
+            shareTwitter.href = `https://twitter.com/intent/tweet?url=${url}&text=${text}`;
+            shareKakao.addEventListener('click', () => {
+                Kakao.Link.sendDefault({
+                    objectType: 'feed',
+                    content: {
+                        title: '타일 매칭 게임',
+                        description: `저는 타일 매칭 게임에서 ${score}점을 기록했습니다!`,
+                        link: {
+                            webUrl: window.location.href,
+                            mobileWebUrl: window.location.href
+                        }
+                    }
+                });
+            });
+        }
+
+        startButton.addEventListener('click', () => {
+            difficulty = difficultySelect.value;
+            showGameScreen();
+            initGame();
+            backgroundMusic.play();
+        });
+
+        restartButton.addEventListener('click', () => {
+            initGame();
+            backgroundMusic.play();
+        });
+
+        quitButton.addEventListener('click', quitGame);
+
+        instructionsButton.addEventListener('click', () => {
+            instructionsModal.style.display = 'block';
+            instructionsOverlay.style.display = 'block';
+        });
+
+        closeInstructions.addEventListener('click', () => {
+            instructionsModal.style.display = 'none';
+            instructionsOverlay.style.display = 'none';
+        });
+
+        showHomeScreen();
+    </script>
+    <!-- Include Kakao SDK -->
+    <script src="https://developers.kakao.com/sdk/js/kakao.js"></script>
+    <script>
+        Kakao.init('YOUR_APP_KEY'); // Replace with your Kakao App Key
+    </script>
+</body>
+</html>
